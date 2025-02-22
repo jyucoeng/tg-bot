@@ -1,4 +1,4 @@
-#（用Cloudflare 搭建一个TG私信机器人，用于解决 telegram私聊的双向限制）
+# 用Cloudflare 搭建一个TG私信机器人，用于解决 telegram私聊的双向限制
 # NFD
 [油管视频请看](https://www.youtube.com/watch?v=DBQqj9UwS1M&list=WL&index=1)
 
