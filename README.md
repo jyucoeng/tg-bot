@@ -1,15 +1,4 @@
 
-# 欢迎使用我们NFD2.0项目🎉，1分钟内快速搭建教程：
-
-用户先去@BotFather，输入 /newbot ，按照指引输入你要创建的机器人的昵称和名字，点击复制机器人吐出的token
-
-然后到@NodeForwardBot粘贴，完活。
-
-详细信息可以参考： [https://www.nodeseek.com/post-286885-1](https://www.nodeseek.com/post-286885-1)
-
-NFD2.0拥有无限配额（自建有每日1k消息上限），且托管在cloudflare snippets，理论上不会掉线。如果需要自建，参考下面的自建教程。
-
-
 # 用Cloudflare 搭建一个TG私信机器人，用于解决 telegram私聊的双向限制
 # NFD
 [油管视频请看](https://www.youtube.com/watch?v=DBQqj9UwS1M&list=WL&index=1)
