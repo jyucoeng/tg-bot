@@ -5,7 +5,7 @@
 
 然后到@NodeForwardBot粘贴，完活。
 
-详细信息可以参考： [详细参见这里](https://www.nodeseek.com/post-286885-1)
+详细信息可以参考： [https://www.nodeseek.com/post-286885-1](https://www.nodeseek.com/post-286885-1)
 
 NFD2.0拥有无限配额（自建有每日1k消息上限），且托管在cloudflare snippets，理论上不会掉线。如果需要自建，参考下面的自建教程。
 
