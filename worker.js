@@ -9,6 +9,7 @@ const notificationUrl = 'https://raw.githubusercontent.com/LloydAsp/nfd/main/dat
 const startMsgUrl = 'https://raw.githubusercontent.com/LloydAsp/nfd/main/data/startMessage.md';
 
 const enable_notification = false
+const enable_verification = true // 是否启用验证码
 
 /**
  * Return url to telegram api, optionally with parameters added
@@ -46,6 +47,244 @@ function copyMessage(msg = {}){
 
 function forwardMessage(msg){
   return requestTelegram('forwardMessage', makeReqBody(msg))
+}
+
+function sendPhoto(msg = {}){
+  return requestTelegram('sendPhoto', makeReqBody(msg))
+}
+
+/**
+ * 生成数学验证码
+ */
+function generateMathCaptcha(){
+  const a = Math.floor(Math.random() * 50) + 10
+  const b = Math.floor(Math.random() * 50) + 10
+  const operators = ['+', '-', '*']
+  const op = operators[Math.floor(Math.random() * operators.length)]
+  
+  let answer
+  let question
+  
+  if(op === '+'){
+    answer = a + b
+    question = `${a} + ${b} = ?`
+  } else if(op === '-'){
+    answer = a - b
+    question = `${a} - ${b} = ?`
+  } else {
+    const a2 = Math.floor(Math.random() * 12) + 2
+    const b2 = Math.floor(Math.random() * 12) + 2
+    answer = a2 * b2
+    question = `${a2} × ${b2} = ?`
+  }
+  
+  return {
+    type: 'math',
+    question: question,
+    answer: String(answer)
+  }
+}
+
+/**
+ * 生成逻辑验证码
+ */
+function generateLogicCaptcha(){
+  const puzzles = [
+    () => {
+      const age = Math.floor(Math.random() * 8) + 8
+      return {
+        question: `小明今年${age}岁，5年后他多少岁？`,
+        answer: String(age + 5)
+      }
+    },
+    () => {
+      const hours = Math.floor(Math.random() * 4) + 2
+      return {
+        question: `现在是10点，${hours}小时后几点？`,
+        answer: String(10 + hours)
+      }
+    },
+    () => {
+      const total = Math.floor(Math.random() * 8) + 8
+      const eat = Math.floor(Math.random() * 3) + 2
+      return {
+        question: `有${total}个苹果，吃${eat}个，剩几个？`,
+        answer: String(total - eat)
+      }
+    }
+  ]
+  
+  const puzzle = puzzles[Math.floor(Math.random() * puzzles.length)]()
+  return {
+    type: 'logic',
+    question: puzzle.question,
+    answer: puzzle.answer
+  }
+}
+
+/**
+ * 生成中文数字验证码
+ */
+function generateChineseCaptcha(){
+  const chineseNums = ['零', '一', '二', '三', '四', '五', '六', '七', '八', '九']
+  const num = Math.floor(Math.random() * 90) + 10 // 10-99
+  
+  let chineseForm
+  if(num >= 10 && num < 20){
+    chineseForm = '十' + (num % 10 === 0 ? '' : chineseNums[num % 10])
+  } else {
+    chineseForm = chineseNums[Math.floor(num / 10)] + '十' + (num % 10 === 0 ? '' : chineseNums[num % 10])
+  }
+  
+  return {
+    type: 'chinese',
+    question: '请将中文数字转为阿拉伯数字',
+    display: chineseForm,
+    answer: String(num)
+  }
+}
+
+/**
+ * 生成数字序列验证码（找规律）
+ */
+function generateSequenceCaptcha(){
+  const patterns = [
+    // 等差数列
+    () => {
+      const start = Math.floor(Math.random() * 10) + 1
+      const diff = Math.floor(Math.random() * 4) + 2
+      const seq = [start, start + diff, start + diff*2, start + diff*3]
+      return {
+        question: `找规律填空：${seq.join(', ')}, ?`,
+        answer: String(start + diff*4)
+      }
+    },
+    // 等比数列
+    () => {
+      const start = Math.floor(Math.random() * 4) + 2
+      const ratio = Math.floor(Math.random() * 2) + 2
+      const seq = [start, start*ratio, start*ratio*ratio, start*ratio*ratio*ratio]
+      return {
+        question: `找规律填空：${seq.join(', ')}, ?`,
+        answer: String(start * Math.pow(ratio, 4))
+      }
+    },
+    // 平方数列
+    () => {
+      const start = Math.floor(Math.random() * 5) + 1
+      const seq = [
+        Math.pow(start, 2),
+        Math.pow(start + 1, 2),
+        Math.pow(start + 2, 2),
+        Math.pow(start + 3, 2)
+      ]
+      return {
+        question: `找规律填空：${seq.join(', ')}, ?`,
+        answer: String(Math.pow(start + 4, 2))
+      }
+    }
+  ]
+  
+  const pattern = patterns[Math.floor(Math.random() * patterns.length)]()
+  return {
+    type: 'sequence',
+    question: pattern.question,
+    answer: pattern.answer
+  }
+}
+
+/**
+ * 生成时间识别验证码
+ */
+function generateTimeCaptcha(){
+  const periods = ['上午', '下午', '晚上']
+  const period = periods[Math.floor(Math.random() * periods.length)]
+  
+  let hour24, hour12
+  const minute = [0, 15, 30, 45][Math.floor(Math.random() * 4)]
+  
+  if(period === '上午'){
+    hour12 = Math.floor(Math.random() * 6) + 6 // 6-11
+    hour24 = hour12
+  } else if(period === '下午'){
+    hour12 = Math.floor(Math.random() * 6) + 12 // 12, 1-5
+    if(hour12 > 12) hour12 -= 12
+    hour24 = hour12 === 12 ? 12 : hour12 + 12
+  } else { // 晚上
+    hour12 = Math.floor(Math.random() * 6) + 6 // 6-11
+    hour24 = hour12 + 12
+  }
+  
+  const hourCnMap = {
+    1: '一', 2: '二', 3: '三', 4: '四', 5: '五', 6: '六',
+    7: '七', 8: '八', 9: '九', 10: '十', 11: '十一', 12: '十二'
+  }
+  
+  let timeStr = period + hourCnMap[hour12] + '点'
+  if(minute === 15) timeStr += '一刻'
+  else if(minute === 30) timeStr += '半'
+  else if(minute === 45) timeStr += '三刻'
+  
+  return {
+    type: 'time',
+    question: '请用24小时制表示（格式：HH:MM）',
+    display: timeStr,
+    answer: `${String(hour24).padStart(2, '0')}:${String(minute).padStart(2, '0')}`
+  }
+}
+
+/**
+ * 生成按钮选择验证码
+ */
+function generateButtonCaptcha(){
+  const a = Math.floor(Math.random() * 20) + 5
+  const b = Math.floor(Math.random() * 20) + 5
+  const operators = ['+', '-']
+  const op = operators[Math.floor(Math.random() * operators.length)]
+  
+  let correctAnswer
+  if(op === '+'){
+    correctAnswer = a + b
+  } else {
+    correctAnswer = a - b
+  }
+  
+  // 生成3个错误选项
+  const options = [correctAnswer]
+  while(options.length < 4){
+    const wrongAnswer = correctAnswer + Math.floor(Math.random() * 10) - 5
+    if(wrongAnswer !== correctAnswer && wrongAnswer > 0 && !options.includes(wrongAnswer)){
+      options.push(wrongAnswer)
+    }
+  }
+  
+  // 打乱选项顺序
+  options.sort(() => Math.random() - 0.5)
+  
+  return {
+    type: 'button',
+    question: `${a} ${op} ${b} = ?`,
+    answer: String(correctAnswer),
+    options: options
+  }
+}
+
+/**
+ * 生成验证码（随机类型）
+ */
+function generateCaptcha(){
+  const types = ['math', 'logic', 'chinese', 'sequence', 'time', 'button']
+  const type = types[Math.floor(Math.random() * types.length)]
+  
+  switch(type){
+    case 'math': return generateMathCaptcha()
+    case 'logic': return generateLogicCaptcha()
+    case 'chinese': return generateChineseCaptcha()
+    case 'sequence': return generateSequenceCaptcha()
+    case 'time': return generateTimeCaptcha()
+    case 'button': return generateButtonCaptcha()
+    default: return generateMathCaptcha()
+  }
 }
 
 /**
@@ -90,6 +329,9 @@ async function onUpdate (update) {
   if ('message' in update) {
     await onMessage(update.message)
   }
+  if ('callback_query' in update) {
+    await onCallbackQuery(update.callback_query)
+  }
 }
 
 /**
@@ -97,66 +339,252 @@ async function onUpdate (update) {
  * https://core.telegram.org/bots/api#message
  */
 async function onMessage (message) {
-  if(message.text === '/start'){
-    /*
-    为了不显示开头的面板
-    let startMsg = await fetch(startMsgUrl).then(r => r.text())
-    return sendMessage({
-      chat_id:message.chat.id,
-      text:startMsg,
-    })
-    */
-  }
+  // 管理员消息处理
   if(message.chat.id.toString() === ADMIN_UID){
-    if(!message?.reply_to_message?.chat){
-      /*
-      为了不显示自己输入/start开头的面板
+    // /start 命令
+    if(message.text === '/start'){
       return sendMessage({
         chat_id:ADMIN_UID,
-        text:'使用方法，回复转发的消息，并发送回复消息，或者`/block`、`/unblock`、`/checkblock`等指令'
+        text:'欢迎使用客服Bot管理面板\n\n' +
+             '使用方法：\n' +
+             '• 回复转发的消息，即可回复用户\n' +
+             '• /block - 拉黑用户（回复消息）\n' +
+             '• /unblock - 解除拉黑（回复消息）\n' +
+             '• /checkblock - 查看黑名单'
       })
-      */
     }
-    if(/^\/block$/.exec(message.text)){
+    
+    // 命令处理
+    if(message.text && /^\/block$/.test(message.text)){
       return handleBlock(message)
     }
-    if(/^\/unblock$/.exec(message.text)){
+    if(message.text && /^\/unblock$/.test(message.text)){
       return handleUnBlock(message)
     }
-    if(/^\/checkblock$/.exec(message.text)){
+    if(message.text && /^\/checkblock$/.test(message.text)){
       return checkBlock(message)
     }
-    let guestChantId = await nfd.get('msg-map-' + message?.reply_to_message.message_id,
-                                      { type: "json" })
-    return copyMessage({
-      chat_id: guestChantId,
-      from_chat_id:message.chat.id,
-      message_id:message.message_id,
-    })
+    
+    // 回复用户消息
+    if(message.reply_to_message && message.reply_to_message.message_id){
+      let guestChatId = await nfd.get('msg-map-' + message.reply_to_message.message_id, { type: "json" })
+      if(guestChatId){
+        return copyMessage({
+          chat_id: guestChatId,
+          from_chat_id: message.chat.id,
+          message_id: message.message_id,
+        })
+      } else {
+        return sendMessage({
+          chat_id: ADMIN_UID,
+          text: '⚠️ 找不到对应的用户映射'
+        })
+      }
+    }
+    return
   }
+  
+  // 普通用户消息处理
   return handleGuestMessage(message)
+}
+
+/**
+ * 发送验证码
+ */
+async function sendCaptcha(chatId, isWelcome){
+  let captcha = generateCaptcha()
+  
+  // 保存验证码答案和类型
+  await nfd.put('captcha-' + chatId, captcha.answer, { expirationTtl: 600 })
+  await nfd.put('captcha-type-' + chatId, captcha.type, { expirationTtl: 600 })
+  
+  let messageText, keyboard
+  
+  if(captcha.type === 'math'){
+    messageText = isWelcome
+      ? `🔐 数学验证\n\n欢迎使用本机器人！\n为防止滥用，首次使用需要验证。\n\n📝 请计算：${captcha.question}\n\n💡 提示：请输入计算结果（纯数字）`
+      : `🔐 数学验证\n\n你还未通过验证。\n\n📝 请计算：${captcha.question}\n\n💡 输入计算结果或 /start 换题`
+  } else if(captcha.type === 'logic'){
+    messageText = isWelcome
+      ? `🔐 智力验证\n\n欢迎使用本机器人！\n为防止滥用，首次使用需要验证。\n\n📝 ${captcha.question}\n\n💡 提示：简单的逻辑题，输入数字答案`
+      : `🔐 智力验证\n\n你还未通过验证。\n\n📝 ${captcha.question}\n\n💡 简单逻辑题或 /start 换题`
+  } else if(captcha.type === 'chinese'){
+    messageText = isWelcome
+      ? `🔐 中文数字验证\n\n欢迎使用本机器人！\n为防止滥用，首次使用需要验证。\n\n📝 中文数字：${captcha.display}\n\n💡 ${captcha.question}`
+      : `🔐 中文数字验证\n\n你还未通过验证。\n\n📝 中文数字：${captcha.display}\n\n💡 ${captcha.question}或 /start 换题`
+  } else if(captcha.type === 'sequence'){
+    messageText = isWelcome
+      ? `🔐 逻辑验证\n\n欢迎使用本机器人！\n为防止滥用，首次使用需要验证。\n\n📝 ${captcha.question}\n\n💡 提示：观察规律，填入下一个数字`
+      : `🔐 逻辑验证\n\n你还未通过验证。\n\n📝 ${captcha.question}\n\n💡 观察规律或 /start 换题`
+  } else if(captcha.type === 'time'){
+    messageText = isWelcome
+      ? `🔐 时间验证\n\n欢迎使用本机器人！\n为防止滥用，首次使用需要验证。\n\n📝 时间：${captcha.display}\n\n💡 ${captcha.question}`
+      : `🔐 时间验证\n\n你还未通过验证。\n\n📝 时间：${captcha.display}\n\n💡 ${captcha.question}或 /start 换题`
+  } else if(captcha.type === 'button'){
+    messageText = isWelcome
+      ? `🔐 按钮验证\n\n欢迎使用本机器人！\n为防止滥用，首次使用需要验证。\n\n📝 请计算：${captcha.question}\n\n💡 点击下方正确答案`
+      : `🔐 按钮验证\n\n你还未通过验证。\n\n📝 请计算：${captcha.question}\n\n💡 点击正确答案或 /start 换题`
+    
+    // 生成按钮
+    keyboard = {
+      inline_keyboard: [
+        captcha.options.slice(0, 2).map(opt => ({
+          text: String(opt),
+          callback_data: `verify_${chatId}_${opt}`
+        })),
+        captcha.options.slice(2, 4).map(opt => ({
+          text: String(opt),
+          callback_data: `verify_${chatId}_${opt}`
+        }))
+      ]
+    }
+  }
+  
+  return sendMessage({
+    chat_id: chatId,
+    text: messageText,
+    reply_markup: keyboard
+  })
+}
+
+/**
+ * 处理验证成功
+ */
+async function handleVerificationSuccess(chatId, from){
+  await nfd.put('verified-' + chatId, true)
+  await nfd.delete('captcha-' + chatId)
+  await nfd.delete('captcha-type-' + chatId)
+  
+  // 通知管理员
+  let userName = from.first_name || '匿名用户'
+  if(from.username){
+    userName += ` (@${from.username})`
+  }
+  await sendMessage({
+    chat_id: ADMIN_UID,
+    text: `✅ 新用户验证成功\n\n👤 用户：${userName}\n🆔 ID：${chatId}\n⏰ 时间：${new Date().toLocaleString('zh-CN', {timeZone: 'Asia/Shanghai'})}`
+  })
+  
+  return sendMessage({
+    chat_id: chatId,
+    text: '✅ 验证成功！\n\n👋 欢迎回来！\n\n请直接输入消息，主人收到就会回复你'
+  })
+}
+
+/**
+ * 处理按钮回调
+ */
+async function onCallbackQuery(callbackQuery){
+  const data = callbackQuery.data
+  const chatId = callbackQuery.message.chat.id
+  
+  if(data.startsWith('verify_')){
+    const parts = data.split('_')
+    const userId = parseInt(parts[1])
+    const userAnswer = parts[2]
+    
+    if(chatId !== userId){
+      return requestTelegram('answerCallbackQuery', makeReqBody({
+        callback_query_id: callbackQuery.id,
+        text: '⚠️ 这不是你的验证码',
+        show_alert: true
+      }))
+    }
+    
+    let expectedAnswer = await nfd.get('captcha-' + chatId)
+    
+    if(!expectedAnswer){
+      return requestTelegram('answerCallbackQuery', makeReqBody({
+        callback_query_id: callbackQuery.id,
+        text: '⚠️ 验证码已过期，请发送 /start 重新获取',
+        show_alert: true
+      }))
+    }
+    
+    if(userAnswer === expectedAnswer){
+      // 验证成功
+      await requestTelegram('answerCallbackQuery', makeReqBody({
+        callback_query_id: callbackQuery.id,
+        text: '✅ 验证成功！'
+      }))
+      
+      await handleVerificationSuccess(chatId, callbackQuery.from)
+    } else {
+      // 验证失败
+      await requestTelegram('answerCallbackQuery', makeReqBody({
+        callback_query_id: callbackQuery.id,
+        text: '❌ 答案错误，请重试',
+        show_alert: true
+      }))
+    }
+  }
 }
 
 async function handleGuestMessage(message){
   let chatId = message.chat.id;
-  let isblocked = await nfd.get('isblocked-' + chatId, { type: "json" })
   
+  // 检查黑名单
+  let isblocked = await nfd.get('isblocked-' + chatId, { type: "json" })
   if(isblocked){
     return sendMessage({
       chat_id: chatId,
-      text:'Your are blocked'
+      text:'⚠️ 你已被管理员拉黑，消息无法发送'
     })
   }
+  
+  // /start 命令 - 发送验证码或欢迎消息
+  if(message.text === '/start'){
+    if(enable_verification){
+      let isVerified = await nfd.get('verified-' + chatId, { type: "json" })
+      if(isVerified){
+        return sendMessage({
+          chat_id: chatId,
+          text: '👋 欢迎回来！\n\n请直接输入消息，主人收到就会回复你'
+        })
+      } else {
+        return sendCaptcha(chatId, true)
+      }
+    }
+    return
+  }
+  
+  // 验证码检查
+  if(enable_verification){
+    let isVerified = await nfd.get('verified-' + chatId, { type: "json" })
+    if(!isVerified){
+      let expectedAnswer = await nfd.get('captcha-' + chatId)
+      
+      if(expectedAnswer){
+        let userInput = message.text ? message.text.trim() : ''
+        
+        if(userInput === expectedAnswer){
+          // 验证成功
+          return handleVerificationSuccess(chatId, message.from)
+        } else {
+          // 验证失败
+          return sendMessage({
+            chat_id: chatId,
+            text: '❌ 验证码错误！\n\n请仔细检查后重新输入\n或发送 /start 获取新的验证题'
+          })
+        }
+      } else {
+        // 没有验证码，生成新的
+        return sendCaptcha(chatId, false)
+      }
+    }
+  }
 
+  // 转发消息给管理员
   let forwardReq = await forwardMessage({
-    chat_id:ADMIN_UID,
-    from_chat_id:message.chat.id,
-    message_id:message.message_id
+    chat_id: ADMIN_UID,
+    from_chat_id: message.chat.id,
+    message_id: message.message_id
   })
-  console.log(JSON.stringify(forwardReq))
+  
   if(forwardReq.ok){
     await nfd.put('msg-map-' + forwardReq.result.message_id, chatId)
   }
+  
   return handleNotify(message)
 }
 
@@ -183,19 +611,101 @@ async function handleNotify(message){
 }
 
 async function handleBlock(message){
-  let guestChantId = await nfd.get('msg-map-' + message.reply_to_message.message_id,
-                                      { type: "json" })
-  if(guestChantId === ADMIN_UID){
+  if(!message.reply_to_message || !message.reply_to_message.message_id){
     return sendMessage({
       chat_id: ADMIN_UID,
-      text:'不能屏蔽自己'
+      text: '⚠️ 请回复用户消息后使用 /block 命令'
     })
   }
-  await nfd.put('isblocked-' + guestChantId, true)
+  
+  let guestChatId = await nfd.get('msg-map-' + message.reply_to_message.message_id, { type: "json" })
+  
+  if(!guestChatId){
+    return sendMessage({
+      chat_id: ADMIN_UID,
+      text: '⚠️ 找不到对应的用户映射'
+    })
+  }
+  
+  if(guestChatId === ADMIN_UID){
+    return sendMessage({
+      chat_id: ADMIN_UID,
+      text:'⚠️ 不能屏蔽自己'
+    })
+  }
+  
+  await nfd.put('isblocked-' + guestChatId, true)
 
   return sendMessage({
     chat_id: ADMIN_UID,
-    text: `UID:${guestChantId}屏蔽成功`,
+    text: `🚫 已将用户 ${guestChatId} 加入黑名单`,
+  })
+}
+
+async function handleUnBlock(message){
+  if(!message.reply_to_message || !message.reply_to_message.message_id){
+    return sendMessage({
+      chat_id: ADMIN_UID,
+      text: '⚠️ 请回复用户消息后使用 /unblock 命令'
+    })
+  }
+  
+  let guestChatId = await nfd.get('msg-map-' + message.reply_to_message.message_id, { type: "json" })
+  
+  if(!guestChatId){
+    return sendMessage({
+      chat_id: ADMIN_UID,
+      text: '⚠️ 找不到对应的用户映射'
+    })
+  }
+  
+  await nfd.delete('isblocked-' + guestChatId)
+
+  return sendMessage({
+    chat_id: ADMIN_UID,
+    text: `✅ 已将用户 ${guestChatId} 从黑名单移除`,
+  })
+}
+
+async function checkBlock(message){
+  // 获取所有黑名单用户（需要遍历KV，这里简化处理）
+  return sendMessage({
+    chat_id: ADMIN_UID,
+    text: '📋 黑名单功能\n\n由于KV存储限制，请使用 /block 和 /unblock 命令管理黑名单\n\n使用方法：回复用户消息后发送对应命令'
+  })
+}
+
+async function isFraud(chatId){
+  try {
+    let fraudList = await fetch(fraudDb).then(r => r.text())
+    return fraudList.includes(chatId.toString())
+  } catch(e) {
+    return false
+  }
+}
+
+/**
+ * Register webhook for Telegram
+ */
+async function registerWebhook(event, requestUrl, suffix, secret){
+  const webhookUrl = `${requestUrl.protocol}//${requestUrl.hostname}${suffix}`
+  const r = await fetch(apiUrl('setWebhook', {
+    url: webhookUrl,
+    secret_token: secret
+  }))
+  
+  return new Response(await r.text(), {
+    headers: { 'content-type': 'application/json' }
+  })
+}
+
+/**
+ * Unregister webhook
+ */
+async function unRegisterWebhook(event){
+  const r = await fetch(apiUrl('deleteWebhook'))
+  return new Response(await r.text(), {
+    headers: { 'content-type': 'application/json' }
   })
 }
 
