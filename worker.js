@@ -9,7 +9,8 @@ const notificationUrl = 'https://raw.githubusercontent.com/LloydAsp/nfd/main/dat
 const startMsgUrl = 'https://raw.githubusercontent.com/LloydAsp/nfd/main/data/startMessage.md';
 
 const enable_notification = false
-const enable_verification = true // 是否启用验证码
+// 从KV存储获取验证功能开关状态，如果未设置则默认为true
+let enable_verification = true // 是否启用验证码
 
 /**
  * Return url to telegram api, optionally with parameters added
@@ -339,6 +340,17 @@ async function onUpdate (update) {
  * https://core.telegram.org/bots/api#message
  */
 async function onMessage (message) {
+  // 从KV存储获取验证功能开关状态
+  try {
+    const verificationStatus = await nfd.get('enable_verification', { type: "json" })
+    if(verificationStatus !== null) {
+      enable_verification = verificationStatus
+    }
+  } catch (e) {
+    // 如果获取失败，使用默认值true
+    console.log('Failed to get enable_verification from KV:', e)
+  }
+  
   // 管理员消息处理
   if(message.chat.id.toString() === ADMIN_UID){
     // /start 命令
@@ -350,7 +362,12 @@ async function onMessage (message) {
              '• 回复转发的消息，即可回复用户\n' +
              '• /block - 拉黑用户（回复消息）\n' +
              '• /unblock - 解除拉黑（回复消息）\n' +
-             '• /checkblock - 查看黑名单'
+             '• /checkblock - 查看黑名单\n' +
+             '• /uv - 取消用户验证（回复消息）\n' +
+             '• /uv <用户ID> - 取消指定用户验证\n' +
+             '• /verificationStatus - 查看验证功能状态\n' +
+             '• /enableVerification - 开启答题验证码功能（默认开启））\n' +
+             '• /disableVerification - 关闭答题验证码功能'
       })
     }
     
@@ -363,6 +380,24 @@ async function onMessage (message) {
     }
     if(message.text && /^\/checkblock$/.test(message.text)){
       return checkBlock(message)
+    }
+    if(message.text && /^\/uv/.test(message.text)){
+      return handleUnverify(message)
+    }
+    
+    // /verificationStatus 命令 - 查看验证功能状态
+    if(message.text && message.text === '/verificationStatus'){
+      return handleVerificationStatus(message)
+    }
+    
+    // /enableVerification 命令 - 开启验证功能
+    if(message.text && message.text === '/enableVerification'){
+      return handleEnableVerification(message)
+    }
+    
+    // /disableVerification 命令 - 关闭验证功能
+    if(message.text && message.text === '/disableVerification'){
+      return handleDisableVerification(message)
     }
     
     // 回复用户消息
@@ -402,39 +437,120 @@ async function sendCaptcha(chatId, isWelcome){
   
   if(captcha.type === 'math'){
     messageText = isWelcome
-      ? `🔐 数学验证\n\n欢迎使用本机器人！\n为防止滥用，首次使用需要验证。\n\n📝 请计算：${captcha.question}\n\n💡 提示：请输入计算结果（纯数字）`
-      : `🔐 数学验证\n\n你还未通过验证。\n\n📝 请计算：${captcha.question}\n\n💡 输入计算结果或 /start 换题`
+      ? `🔐 数学验证
+
+欢迎使用本机器人！
+为防止滥用，首次使用需要验证。
+
+📝 请计算：${captcha.question}
+
+💡 提示：请输入计算结果（纯数字）`
+      : `🔐 数学验证
+
+你还未通过验证。
+
+📝 请计算：${captcha.question}
+
+💡 输入计算结果或 /start 换题`
   } else if(captcha.type === 'logic'){
     messageText = isWelcome
-      ? `🔐 智力验证\n\n欢迎使用本机器人！\n为防止滥用，首次使用需要验证。\n\n📝 ${captcha.question}\n\n💡 提示：简单的逻辑题，输入数字答案`
-      : `🔐 智力验证\n\n你还未通过验证。\n\n📝 ${captcha.question}\n\n💡 简单逻辑题或 /start 换题`
+      ? `🔐 智力验证
+
+欢迎使用本机器人！
+为防止滥用，首次使用需要验证。
+
+📝 ${captcha.question}
+
+💡 提示：简单的逻辑题，输入数字答案`
+      : `🔐 智力验证
+
+你还未通过验证。
+
+📝 ${captcha.question}
+
+💡 简单逻辑题或 /start 换题`
   } else if(captcha.type === 'chinese'){
     messageText = isWelcome
-      ? `🔐 中文数字验证\n\n欢迎使用本机器人！\n为防止滥用，首次使用需要验证。\n\n📝 中文数字：${captcha.display}\n\n💡 ${captcha.question}`
-      : `🔐 中文数字验证\n\n你还未通过验证。\n\n📝 中文数字：${captcha.display}\n\n💡 ${captcha.question}或 /start 换题`
+      ? `🔐 中文数字验证
+
+欢迎使用本机器人！
+为防止滥用，首次使用需要验证。
+
+📝 中文数字：${captcha.display}
+
+💡 ${captcha.question}`
+      : `🔐 中文数字验证
+
+你还未通过验证。
+
+📝 中文数字：${captcha.display}
+
+💡 ${captcha.question}或 /start 换题`
   } else if(captcha.type === 'sequence'){
     messageText = isWelcome
-      ? `🔐 逻辑验证\n\n欢迎使用本机器人！\n为防止滥用，首次使用需要验证。\n\n📝 ${captcha.question}\n\n💡 提示：观察规律，填入下一个数字`
-      : `🔐 逻辑验证\n\n你还未通过验证。\n\n📝 ${captcha.question}\n\n💡 观察规律或 /start 换题`
+      ? `🔐 逻辑验证
+
+欢迎使用本机器人！
+为防止滥用，首次使用需要验证。
+
+📝 ${captcha.question}
+
+💡 提示：观察规律，填入下一个数字`
+      : `🔐 逻辑验证
+
+你还未通过验证。
+
+📝 ${captcha.question}
+
+💡 观察规律或 /start 换题`
   } else if(captcha.type === 'time'){
     messageText = isWelcome
-      ? `🔐 时间验证\n\n欢迎使用本机器人！\n为防止滥用，首次使用需要验证。\n\n📝 时间：${captcha.display}\n\n💡 ${captcha.question}`
-      : `🔐 时间验证\n\n你还未通过验证。\n\n📝 时间：${captcha.display}\n\n💡 ${captcha.question}或 /start 换题`
+      ? `🔐 时间验证
+
+欢迎使用本机器人！
+为防止滥用，首次使用需要验证。
+
+📝 时间：${captcha.display}
+
+💡 ${captcha.question}`
+      : `🔐 时间验证
+
+你还未通过验证。
+
+📝 时间：${captcha.display}
+
+💡 ${captcha.question}或 /start 换题`
   } else if(captcha.type === 'button'){
     messageText = isWelcome
-      ? `🔐 按钮验证\n\n欢迎使用本机器人！\n为防止滥用，首次使用需要验证。\n\n📝 请计算：${captcha.question}\n\n💡 点击下方正确答案`
-      : `🔐 按钮验证\n\n你还未通过验证。\n\n📝 请计算：${captcha.question}\n\n💡 点击正确答案或 /start 换题`
+      ? `🔐 按钮验证
+
+欢迎使用本机器人！
+为防止滥用，首次使用需要验证。
+
+📝 请计算：${captcha.question}
+
+💡 点击下方正确答案`
+      : `🔐 按钮验证
+
+你还未通过验证。
+
+📝 请计算：${captcha.question}
+
+💡 点击正确答案或 /start 换题`
     
-    // 生成按钮
+    // 保存选项列表到KV存储
+    await nfd.put('captcha-options-' + chatId, JSON.stringify(captcha.options), { expirationTtl: 600 })
+    
+    // 生成按钮（使用索引而不是答案值，防止答案泄露）
     keyboard = {
       inline_keyboard: [
-        captcha.options.slice(0, 2).map(opt => ({
+        captcha.options.slice(0, 2).map((opt, idx) => ({
           text: String(opt),
-          callback_data: `verify_${chatId}_${opt}`
+          callback_data: `verify_${chatId}_${idx}`
         })),
-        captcha.options.slice(2, 4).map(opt => ({
+        captcha.options.slice(2, 4).map((opt, idx) => ({
           text: String(opt),
-          callback_data: `verify_${chatId}_${opt}`
+          callback_data: `verify_${chatId}_${idx + 2}`
         }))
       ]
     }
@@ -462,7 +578,11 @@ async function handleVerificationSuccess(chatId, from){
   }
   await sendMessage({
     chat_id: ADMIN_UID,
-    text: `✅ 新用户验证成功\n\n👤 用户：${userName}\n🆔 ID：${chatId}\n⏰ 时间：${new Date().toLocaleString('zh-CN', {timeZone: 'Asia/Shanghai'})}`
+    text: `✅ 新用户验证成功
+
+👤 用户：${userName}\n
+🆔 ID：${chatId}\n
+⏰ 时间：${new Date().toLocaleString('zh-CN', {timeZone: 'Asia/Shanghai'})}`
   })
   
   return sendMessage({
@@ -481,7 +601,7 @@ async function onCallbackQuery(callbackQuery){
   if(data.startsWith('verify_')){
     const parts = data.split('_')
     const userId = parseInt(parts[1])
-    const userAnswer = parts[2]
+    const optionIndex = parseInt(parts[2])
     
     if(chatId !== userId){
       return requestTelegram('answerCallbackQuery', makeReqBody({
@@ -501,12 +621,28 @@ async function onCallbackQuery(callbackQuery){
       }))
     }
     
+    // 获取选项列表
+    let optionsJson = await nfd.get('captcha-options-' + chatId)
+    if(!optionsJson){
+      return requestTelegram('answerCallbackQuery', makeReqBody({
+        callback_query_id: callbackQuery.id,
+        text: '⚠️ 验证码已过期，请发送 /start 重新获取',
+        show_alert: true
+      }))
+    }
+    
+    let options = JSON.parse(optionsJson)
+    let userAnswer = String(options[optionIndex])
+    
     if(userAnswer === expectedAnswer){
       // 验证成功
       await requestTelegram('answerCallbackQuery', makeReqBody({
         callback_query_id: callbackQuery.id,
         text: '✅ 验证成功！'
       }))
+      
+      // 删除选项数据
+      await nfd.delete('captcha-options-' + chatId)
       
       await handleVerificationSuccess(chatId, callbackQuery.from)
     } else {
@@ -574,7 +710,15 @@ async function handleGuestMessage(message){
     }
   }
 
-  // 转发消息给管理员
+  // 构建用户信息
+  let userName = message.from.first_name || '匿名用户'
+  if(message.from.last_name){
+    userName += ' ' + message.from.last_name
+  }
+  let userTag = message.from.username ? `(@${message.from.username})` : `(ID: ${chatId})`
+  let userInfo = `📨 来自 ${userName}${userTag}`
+  
+  // 转发原始消息
   let forwardReq = await forwardMessage({
     chat_id: ADMIN_UID,
     from_chat_id: message.chat.id,
@@ -733,6 +877,62 @@ async function checkBlock(message){
 }
 
 /**
+ * 取消用户验证
+ */
+async function handleUnverify(message){
+  let guestChatId = null
+  
+  // 检查是否是 /uv TGID 格式
+  if(message.text && message.text.trim().startsWith('/uv ')){
+    const parts = message.text.trim().split(/\s+/)
+    if(parts.length === 2 && /^\d+$/.test(parts[1])){
+      // /uv 123456789 格式
+      guestChatId = parseInt(parts[1])
+    } else {
+      return sendMessage({
+        chat_id: ADMIN_UID,
+        text: '⚠️ 使用方法：\n\n1️⃣ 回复用户消息后使用 /uv 命令\n2️⃣ 使用 /uv <用户ID> 直接指定用户\n\n示例：/uv 123456789'
+      })
+    }
+  } 
+  // /uv 命令 - 回复消息取消验证
+  else if(message.reply_to_message && message.reply_to_message.message_id){
+    guestChatId = await nfd.get('msg-map-' + message.reply_to_message.message_id, { type: "json" })
+    
+    if(!guestChatId){
+      return sendMessage({
+        chat_id: ADMIN_UID,
+        text: '⚠️ 找不到对应的用户映射'
+      })
+    }
+  } 
+  else {
+    return sendMessage({
+      chat_id: ADMIN_UID,
+      text: '⚠️ 使用方法：\n\n1️⃣ 回复用户消息后使用 /uv 命令\n2️⃣ 使用 /uv <用户ID> 直接指定用户\n\n示例：/uv 123456789'
+    })
+  }
+  
+  // 检查用户是否已验证
+  let isVerified = await nfd.get('verified-' + guestChatId, { type: "json" })
+  
+  if(!isVerified){
+    return sendMessage({
+      chat_id: ADMIN_UID,
+      text: `⚠️ 用户 ${guestChatId} 尚未验证或已被取消验证,该用户需要验证答题后才能发送消息`
+    })
+  }
+  
+  // 删除用户验证状态
+  await nfd.delete('verified-' + guestChatId)
+  
+  return sendMessage({
+    chat_id: ADMIN_UID,
+    text: `✅ 已取消用户 ${guestChatId} 的验证\n\n该用户需要重新验证后才能发送消息`
+  })
+}
+
+/**
  * Send plain text message
  * https://core.telegram.org/bots/api#sendmessage
  */
@@ -761,6 +961,65 @@ async function registerWebhook (event, requestUrl, suffix, secret) {
 async function unRegisterWebhook (event) {
   const r = await (await fetch(apiUrl('setWebhook', { url: '' }))).json()
   return new Response('ok' in r && r.ok ? 'Ok' : JSON.stringify(r, null, 2))
+}
+
+/**
+ * 查看验证功能状态
+ */
+async function handleVerificationStatus(message){
+  // 从KV存储获取验证功能开关状态
+  try {
+    const verificationStatus = await nfd.get('enable_verification', { type: "json" })
+    const currentStatus = verificationStatus !== null ? verificationStatus : true
+    
+    return sendMessage({
+      chat_id: ADMIN_UID,
+      text: `📊 验证功能状态：${currentStatus ? '已开启' : '已关闭'}\n\n使用 /enableVerification 开启验证功能\n使用 /disableVerification 关闭验证功能`
+    })
+  } catch (e) {
+    return sendMessage({
+      chat_id: ADMIN_UID,
+      text: '❌ 获取验证功能状态失败：' + e.message
+    })
+  }
+}
+
+/**
+ * 开启验证功能
+ */
+async function handleEnableVerification(message){
+  try {
+    await nfd.put('enable_verification', true, { type: "json" })
+    
+    return sendMessage({
+      chat_id: ADMIN_UID,
+      text: '✅ 验证功能已开启'
+    })
+  } catch (e) {
+    return sendMessage({
+      chat_id: ADMIN_UID,
+      text: '❌ 开启验证功能失败：' + e.message
+    })
+  }
+}
+
+/**
+ * 关闭验证功能
+ */
+async function handleDisableVerification(message){
+  try {
+    await nfd.put('enable_verification', false, { type: "json" })
+    
+    return sendMessage({
+      chat_id: ADMIN_UID,
+      text: '✅ 验证功能已关闭'
+    })
+  } catch (e) {
+    return sendMessage({
+      chat_id: ADMIN_UID,
+      text: '❌ 关闭验证功能失败：' + e.message
+    })
+  }
 }
 
 async function isFraud(id){
